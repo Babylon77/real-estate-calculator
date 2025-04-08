@@ -28,7 +28,7 @@ This is the MVP (Minimum Viable Product) release of the Real Estate Flip Calcula
 
 ## How to Deploy to GitHub Pages
 
-You can access the live demo at: [Real Estate Flip Calculator](https://yourusername.github.io/real-estate-calculator/)
+You can access the live demo at: [Real Estate Flip Calculator](https://babylon77.github.io/real-estate-calculator/)
 
 To deploy the application yourself:
 
@@ -90,4 +90,4 @@ Please provide feedback on:
 - Address any critical user feedback
 - Add property comparison feature
 - Implement user accounts for saving calculations
-- Add export to spreadsheet functionality 
+- Add export to spreadsheet functionality
