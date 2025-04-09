@@ -97,12 +97,23 @@ function Calculator() {
     // Renovation Estimator
     houseSize: '1500',
     houseCondition: 'fair',
-    location: 'TX',
+    location: 'NJ',
     diyLevel: 'minimal',
     
     // Selling Details
     expectedSellingPrice: '',
     sellingCosts: '8',
+    expectedMonthlyRent: '',
+    
+    // Timeline Details (for Gantt chart)
+    timelineEstimates: {
+      closingTime: '30', // days until closing
+      permitTime: '15', // days to get permits
+      demoTime: '7', // days for demolition
+      roughInTime: '14', // days for rough-in work
+      finishTime: '21', // days for finishing work
+      listingTime: '45', // days on market
+    }
   });
 
   const [openBreakdown, setOpenBreakdown] = useState(false);
@@ -432,6 +443,21 @@ function Calculator() {
                   required
                   InputProps={{
                     endAdornment: <Box component="span" sx={{ ml: 1 }}>%</Box>,
+                  }}
+                />
+              </Tooltip>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Tooltip title="Expected monthly rent if property is held as a rental (optional)" placement="top">
+                <TextField
+                  fullWidth
+                  label="Expected Monthly Rent (optional)"
+                  name="expectedMonthlyRent"
+                  type="number"
+                  value={formData.expectedMonthlyRent}
+                  onChange={handleChange}
+                  InputProps={{
+                    startAdornment: <Box component="span" sx={{ mr: 1 }}>$</Box>,
                   }}
                 />
               </Tooltip>

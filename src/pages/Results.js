@@ -42,6 +42,11 @@ import {
   Legend,
 } from 'recharts';
 
+// Import the new components
+import TimelineVisualization from '../components/TimelineVisualization';
+import FinanceOptionsComparison from '../components/FinanceOptionsComparison';
+import ExitStrategyComparison from '../components/ExitStrategyComparison';
+
 // Renovation cost constants
 const RENOVATION_COST_ESTIMATES = {
   teardown: { base: 100, range: [80, 150] },
@@ -146,10 +151,24 @@ function Results() {
   const dealQuality = getDealQuality();
   const getQualityColor = (quality) => {
     switch (quality) {
-      case 'Excellent': return 'success';
-      case 'Good': return 'info';
+      case 'Excellent': return 'primary';
+      case 'Good': return 'primary';
       case 'Fair': return 'warning';
-      default: return 'error';
+      case 'Poor': return 'error';
+      default: return 'primary';
+    }
+  };
+
+  // Function to generate executive summary for the report
+  const getExecutiveSummary = (roi, arvToPurchaseRatio, renovationToArvRatio) => {
+    if (roi >= 25 && arvToPurchaseRatio >= 1.3 && renovationToArvRatio <= 20) {
+      return "This property shows excellent potential with strong ROI, favorable ARV to purchase ratio, and efficient renovation costs. Recommended for investment.";
+    } else if (roi >= 20 && arvToPurchaseRatio >= 1.2 && renovationToArvRatio <= 25) {
+      return "This property shows good potential with solid ROI and acceptable renovation costs relative to value. Consider moving forward with appropriate risk management.";
+    } else if (roi >= 15 && arvToPurchaseRatio >= 1.15) {
+      return "This property shows fair potential but with tighter margins. Careful management of renovation costs and timeline will be crucial to profitability.";
+    } else {
+      return "This property presents significant challenges with limited profit potential. Consider renegotiating purchase price or seeking a better opportunity.";
     }
   };
 
@@ -177,6 +196,9 @@ function Results() {
   const generateLenderReport = () => {
     // Create a new window for the report
     const reportWindow = window.open('', '_blank');
+    
+    // Calculate important metrics that might be needed in the report
+    const downPayment = (purchasePrice * parseFloat(formData.downPayment || 20)) / 100;
     
     // Calculate what-if scenarios (expanded)
     const scenarios = {
@@ -523,9 +545,10 @@ function Results() {
           <table>
             <tr><th>Parameter</th><th>Value</th></tr>
             <tr><td>House Size</td><td>${formData.houseSize} sq ft</td></tr>
-            <tr><td>House Condition</td><td>${formData.houseCondition.charAt(0).toUpperCase() + formData.houseCondition.slice(1)}</td></tr>
-            <tr><td>Location</td><td>${formData.location}</td></tr>
+            <tr><td>House Condition</td><td>${formData.houseCondition ? formData.houseCondition.charAt(0).toUpperCase() + formData.houseCondition.slice(1) : 'N/A'}</td></tr>
+            <tr><td>Location</td><td>${formData.location || 'N/A'}</td></tr>
             <tr><td>DIY Level</td><td>${(() => {
+              if (!formData.diyLevel) return 'N/A';
               switch(formData.diyLevel) {
                 case 'significant': return 'Significant DIY (40% savings)';
                 case 'minimal': return 'Minimal DIY (15% savings)';
@@ -543,334 +566,661 @@ function Results() {
       `;
     }
 
-    // Create an appendix section explaining renovation costs
+    // Create appendix HTML
     const appendixHTML = `
-      <div class="pagebreak"></div>
       <div class="section">
-        <h2>Appendix: Renovation Cost Methodology</h2>
-        ${(() => {
-          if (formData.useBreakdown) {
-            return `
-              <p>The renovation cost of $${formatCurrency(renovationCost)} was determined using a <strong>detailed component breakdown</strong>. This method provides a more accurate estimate as it considers specific repair costs for individual elements of the property.</p>
-              
-              <h3>Breakdown Summary</h3>
-              <table>
-                <tr><th>Category</th><th>Cost</th><th>% of Total</th></tr>
-                ${Object.entries(formData.renovationBreakdown)
-                  .filter(([_, value]) => parseFloat(value) > 0)
-                  .map(([key, value]) => {
-                    const cost = parseFloat(value);
-                    const percentage = (cost / renovationCost) * 100;
-                    return `
-                      <tr>
-                        <td style="text-transform: capitalize;">${key}</td>
-                        <td>$${formatCurrency(cost)}</td>
-                        <td>${formatPercent(percentage)}%</td>
-                      </tr>
-                    `;
-                  }).join('')}
-                <tr style="font-weight: bold;">
-                  <td>Total</td>
-                  <td>$${formatCurrency(renovationCost)}</td>
-                  <td>100%</td>
-                </tr>
-              </table>
-              
-              <p>This detailed breakdown helps identify where the renovation budget will be allocated, enabling better planning and risk management.</p>
-            `;
-          } else if (formData.renovationMethod === 'estimate') {
-            return `
-              <p>The renovation cost of $${formatCurrency(renovationCost)} was generated using the <strong>Condition Estimator</strong>. This method calculates renovation costs based on property characteristics and local market factors.</p>
-              
-              <h3>Estimation Parameters</h3>
-              <table>
-                <tr><th>Parameter</th><th>Value</th><th>Impact</th></tr>
-                <tr>
-                  <td>House Size</td>
-                  <td>${formatCurrency(parseFloat(formData.houseSize))} sq ft</td>
-                  <td>Base multiplier for total costs</td>
-                </tr>
-                <tr>
-                  <td>House Condition</td>
-                  <td>${formData.houseCondition.charAt(0).toUpperCase() + formData.houseCondition.slice(1)}</td>
-                  <td>${(() => {
-                    switch(formData.houseCondition) {
-                      case 'teardown': return '$80-150 per sq ft';
-                      case 'poor': return '$50-80 per sq ft';
-                      case 'fair': return '$25-45 per sq ft';
-                      case 'good': return '$10-25 per sq ft';
-                      default: return 'N/A';
-                    }
-                  })()}</td>
-                </tr>
-                <tr>
-                  <td>Location</td>
-                  <td>${formData.location}</td>
-                  <td>${(REGIONAL_MULTIPLIERS[formData.location] * 100).toFixed(0)}% of base cost</td>
-                </tr>
-                <tr>
-                  <td>DIY Level</td>
-                  <td>${(() => {
-                    switch(formData.diyLevel) {
-                      case 'significant': return 'Significant DIY';
-                      case 'minimal': return 'Minimal DIY';
-                      case 'gc': return 'You as General Contractor';
-                      case 'none': return 'Hire Full Service GC';
-                      default: return formData.diyLevel;
-                    }
-                  })()}</td>
-                  <td>${(() => {
-                    switch(formData.diyLevel) {
-                      case 'significant': return '40% savings';
-                      case 'minimal': return '15% savings';
-                      case 'gc': return '10% savings';
-                      case 'none': return 'No savings';
-                      default: return 'N/A';
-                    }
-                  })()}</td>
-                </tr>
-              </table>
-              
-              <p>The Condition Estimator provides a quick yet reliable approximation based on typical renovation costs in your region. For a more accurate assessment, consider obtaining detailed contractor quotes.</p>
-              
-              <h3>Calculation Method</h3>
-              <p>Cost Range: $${formatCurrency(parseFloat(formData.houseSize) * RENOVATION_COST_ESTIMATES[formData.houseCondition].range[0] * REGIONAL_MULTIPLIERS[formData.location] * DIY_FACTORS[formData.diyLevel])} - $${formatCurrency(parseFloat(formData.houseSize) * RENOVATION_COST_ESTIMATES[formData.houseCondition].range[1] * REGIONAL_MULTIPLIERS[formData.location] * DIY_FACTORS[formData.diyLevel])}</p>
-              <p>Base Cost: $${formatCurrency(parseFloat(formData.houseSize) * RENOVATION_COST_ESTIMATES[formData.houseCondition].base * REGIONAL_MULTIPLIERS[formData.location] * DIY_FACTORS[formData.diyLevel])}</p>
-            `;
-          } else {
-            return `
-              <p>The renovation cost of $${formatCurrency(renovationCost)} was manually entered based on your estimate.</p>
-              <p>For more accurate cost projections, consider using either:</p>
-              <ul>
-                <li><strong>Detailed Breakdown:</strong> Itemize costs by category (roof, kitchen, etc.)</li>
-                <li><strong>Condition Estimator:</strong> Calculate based on house size, condition, and location</li>
-              </ul>
-              <p>Both methods are available in the calculator and provide better risk assessment than a single lump sum estimate.</p>
-            `;
-          }
-        })()}
-        
-        <div class="highlight" style="margin-top: 20px;">
-          <h3>Renovation Cost Best Practices</h3>
-          <ol>
-            <li>Always include a 10-20% contingency for unexpected issues</li>
-            <li>Get at least three contractor quotes for major renovation work</li>
-            <li>Prioritize repairs that increase property value (kitchens, bathrooms, curb appeal)</li>
-            <li>Create a detailed scope of work to avoid contractor disputes</li>
-            <li>Obtain permits for all structural, electrical, and plumbing work</li>
-          </ol>
+        <h2>Appendix</h2>
+        <div>
+          <h3>Renovation Cost Methodology</h3>
+          <p>The renovation costs in this analysis were ${formData.useBreakdown ? 'itemized by category' : formData.renovationMethod === 'estimate' ? 'estimated based on the property condition and size' : 'provided as a total figure'}.</p>
+          ${renovationBreakdownHTML}
+          
+          <h3>Best Practices for Renovation Management</h3>
+          <ul>
+            <li>Get at least 3 quotes from licensed contractors for major renovation components</li>
+            <li>Add a 15-20% contingency for unexpected issues, especially for older properties</li>
+            <li>Prioritize improvements that add the most value (typically kitchens, bathrooms, and curb appeal)</li>
+            <li>Consider phasing renovations if cash flow is a concern</li>
+            <li>For DIY work, focus on cosmetic improvements rather than structural, electrical, or plumbing</li>
+            <li>Create a detailed timeline with milestones to track progress and avoid delays</li>
+          </ul>
         </div>
       </div>
     `;
 
+    // Generate what-if scenarios for the report
+    const scenariosForReport = [
+      {
+        name: 'Base Case',
+        ...baseScenario
+      },
+      {
+        name: 'Optimistic Scenario',
+        ...calculateScenarioROI(
+          scenarios.purchasePrice.optimistic,
+          scenarios.arv.optimistic,
+          scenarios.renovationCost.optimistic,
+          scenarios.holdingPeriod.optimistic,
+          scenarios.sellingCosts.optimistic,
+          scenarios.interestRate.optimistic
+        )
+      },
+      {
+        name: 'Pessimistic Scenario',
+        ...calculateScenarioROI(
+          scenarios.purchasePrice.pessimistic,
+          scenarios.arv.pessimistic,
+          scenarios.renovationCost.pessimistic,
+          scenarios.holdingPeriod.pessimistic,
+          scenarios.sellingCosts.pessimistic,
+          scenarios.interestRate.pessimistic
+        )
+      },
+      {
+        name: 'Extreme Scenario',
+        ...calculateScenarioROI(
+          scenarios.purchasePrice.pessimistic,
+          scenarios.arv.pessimistic,
+          scenarios.renovationCost.extreme,
+          scenarios.holdingPeriod.extreme,
+          scenarios.sellingCosts.pessimistic,
+          scenarios.interestRate.pessimistic
+        )
+      }
+    ];
+
+    // Include Exit Strategy Comparison
+    const generateExitStrategyComparison = () => {
+      // If no expected monthly rent is provided, return empty string
+      if (!(parseFloat(formData.expectedMonthlyRent) > 0)) {
+        return '';
+      }
+
+      // Calculate rental metrics (similar to ExitStrategyComparison component)
+      const monthlyRent = parseFloat(formData.expectedMonthlyRent) || 0;
+      const annualAppreciationRate = 0.03; // 3% annual appreciation
+      const annualInflationRate = 0.02; // 2% annual inflation
+      const realAppreciationRate = annualAppreciationRate - annualInflationRate;
+      const propertyManagementFee = 0.1; // 10% of rent
+      const maintenancePercent = 0.05; // 5% of rent
+      const vacancyRate = 0.08; // 8% vacancy
+      const rentIncreaseRate = 0.02; // 2% annual rent increase
+      const sellingCostAfterRental = 0.07; // 7% selling cost after rental period
+      const yearsToHold = 5; // 5 year rental period
+
+      // Calculate initial downpayment and loan
+      const downPaymentPercent = parseFloat(formData.downPayment) || 20;
+      const downPayment = (purchasePrice * downPaymentPercent) / 100;
+      const loanAmount = purchasePrice - downPayment;
+      const interestRate = parseFloat(formData.interestRate) || 7.5;
+      const loanTermYears = 30;
+      const monthlyInterestRate = interestRate / 100 / 12;
+      const totalPayments = loanTermYears * 12;
+      
+      const monthlyMortgagePayment = loanAmount * 
+        (monthlyInterestRate * Math.pow(1 + monthlyInterestRate, totalPayments)) / 
+        (Math.pow(1 + monthlyInterestRate, totalPayments) - 1);
+
+      // Helper function to calculate remaining loan balance
+      const calculateRemainingLoanBalance = (principal, monthlyRate, totalPayments, paymentsMade) => {
+        return principal * 
+          (Math.pow(1 + monthlyRate, totalPayments) - Math.pow(1 + monthlyRate, paymentsMade)) / 
+          (Math.pow(1 + monthlyRate, totalPayments) - 1);
+      };
+
+      // Calculate flip metrics (already computed in main code)
+      const sellingCosts = (expectedSellingPrice * parseFloat(formData.sellingCosts)) / 100;
+      const totalInvestment = downPayment + renovationCost + (monthlyExpenses * holdingPeriod);
+      const netFlipProfit = expectedSellingPrice - sellingCosts - purchasePrice - renovationCost - (monthlyExpenses * holdingPeriod);
+      const flipROI = (netFlipProfit / totalInvestment) * 100;
+      const annualizedFlipROI = (flipROI / holdingPeriod) * 12;
+
+      // Calculate 5-year rental metrics
+      let annualCashFlows = [];
+      let appreciatedValues = [];
+      let equityValues = [];
+      
+      for (let year = 1; year <= yearsToHold; year++) {
+        // Calculate appreciation
+        const appreciatedValue = expectedSellingPrice * Math.pow(1 + annualAppreciationRate, year);
+        
+        // Calculate adjusted rent for the year
+        const adjustedMonthlyRent = monthlyRent * Math.pow(1 + rentIncreaseRate, year - 1);
+        const annualRentalIncome = adjustedMonthlyRent * 12;
+        
+        // Calculate expenses
+        const vacancyLoss = annualRentalIncome * vacancyRate;
+        const propertyManagement = annualRentalIncome * propertyManagementFee;
+        const maintenance = annualRentalIncome * maintenancePercent;
+        const propertyTaxes = expectedSellingPrice * 0.015; // Estimate 1.5% of ARV
+        const insurance = expectedSellingPrice * 0.005; // Estimate 0.5% of ARV
+        const annualMortgage = monthlyMortgagePayment * 12;
+        
+        // Total expenses and cash flow
+        const totalExpenses = vacancyLoss + propertyManagement + maintenance + propertyTaxes + insurance + annualMortgage;
+        const annualCashFlow = annualRentalIncome - totalExpenses;
+        
+        // Calculate remaining loan balance
+        const remainingLoanBalance = calculateRemainingLoanBalance(
+          loanAmount, 
+          monthlyInterestRate, 
+          totalPayments, 
+          year * 12
+        );
+        
+        // Calculate equity
+        const equity = appreciatedValue - remainingLoanBalance;
+        
+        annualCashFlows.push(annualCashFlow);
+        appreciatedValues.push(appreciatedValue);
+        equityValues.push(equity);
+      }
+      
+      // Final year metrics
+      const finalAppreciatedValue = appreciatedValues[yearsToHold - 1];
+      const finalRemainingLoanBalance = calculateRemainingLoanBalance(
+        loanAmount, 
+        monthlyInterestRate, 
+        totalPayments, 
+        yearsToHold * 12
+      );
+      const sellingCostAfterHolding = finalAppreciatedValue * sellingCostAfterRental;
+      const netProceedsFromSale = finalAppreciatedValue - finalRemainingLoanBalance - sellingCostAfterHolding;
+      
+      // Calculate total profit components
+      const totalRentalCashFlow = annualCashFlows.reduce((sum, cashFlow) => sum + cashFlow, 0);
+      const totalAppreciation = finalAppreciatedValue - expectedSellingPrice;
+      const totalPrincipalPaydown = loanAmount - finalRemainingLoanBalance;
+      
+      // Total profit and ROI
+      const rentalInitialInvestment = downPayment + renovationCost;
+      const totalRentalProfit = totalRentalCashFlow + netProceedsFromSale - rentalInitialInvestment;
+      const rentalROI = (totalRentalProfit / rentalInitialInvestment) * 100;
+      const annualizedRentalROI = rentalROI / yearsToHold;
+
+      // Generate HTML for exit strategy comparison
+      return `
+        <div class="section">
+          <h2>Exit Strategy Comparison: Flip vs. Rental</h2>
+          
+          <table>
+            <tr>
+              <th>Metric</th>
+              <th>Flip Now</th>
+              <th>Rent for 5 Years</th>
+            </tr>
+            <tr>
+              <td>Total Profit</td>
+              <td>$${formatCurrency(netFlipProfit)}</td>
+              <td>$${formatCurrency(totalRentalProfit)}</td>
+            </tr>
+            <tr>
+              <td>Annualized ROI</td>
+              <td>${formatPercent(annualizedFlipROI)}%</td>
+              <td>${formatPercent(annualizedRentalROI)}%</td>
+            </tr>
+            <tr>
+              <td>Timeframe</td>
+              <td>${holdingPeriod} months</td>
+              <td>5 years</td>
+            </tr>
+            <tr>
+              <td>Risk Level</td>
+              <td>Lower</td>
+              <td>Higher</td>
+            </tr>
+            <tr>
+              <td>Liquidity</td>
+              <td>Higher</td>
+              <td>Lower</td>
+            </tr>
+          </table>
+          
+          <div style="margin-top: 20px;">
+            <h3>Rental Profit Breakdown</h3>
+            <table>
+              <tr>
+                <th>Component</th>
+                <th>Amount</th>
+                <th>Percentage</th>
+              </tr>
+              <tr>
+                <td>Cash Flow (5 years)</td>
+                <td>$${formatCurrency(totalRentalCashFlow)}</td>
+                <td>${formatPercent(totalRentalCashFlow / totalRentalProfit * 100)}%</td>
+              </tr>
+              <tr>
+                <td>Appreciation</td>
+                <td>$${formatCurrency(totalAppreciation)}</td>
+                <td>${formatPercent(totalAppreciation / totalRentalProfit * 100)}%</td>
+              </tr>
+              <tr>
+                <td>Principal Paydown</td>
+                <td>$${formatCurrency(totalPrincipalPaydown)}</td>
+                <td>${formatPercent(totalPrincipalPaydown / totalRentalProfit * 100)}%</td>
+              </tr>
+              <tr>
+                <td>Selling Costs</td>
+                <td>-$${formatCurrency(sellingCostAfterHolding)}</td>
+                <td>${formatPercent(-sellingCostAfterHolding / totalRentalProfit * 100)}%</td>
+              </tr>
+            </table>
+          </div>
+          
+          <div style="margin-top: 20px;">
+            <h3>Understanding Rental ROI</h3>
+            <p>
+              The rental ROI calculation combines both the initial value-add investment (purchase + renovation) 
+              and the ongoing returns from holding the property (cash flow, appreciation, and principal paydown).
+            </p>
+            <p>
+              The high ROI percentage is driven by the power of leverage - you're only investing the down payment (${formData.downPayment}%)
+              but gaining appreciation on the full property value. This highlights why rental real estate can be an
+              effective wealth-building strategy when the numbers work correctly.
+            </p>
+            <p>
+              Key success factors for the rental strategy:
+              <ul>
+                <li>Positive monthly cash flow (${totalRentalCashFlow > 0 ? 'present' : 'not present'} in this scenario)</li>
+                <li>Property in an area with steady appreciation (we assume ${(annualAppreciationRate * 100).toFixed(1)}% annually)</li>
+                <li>Long-term debt paydown building additional equity</li>
+              </ul>
+            </p>
+          </div>
+          
+          <div style="margin-top: 20px;">
+            <h3>Key Assumptions:</h3>
+            <table>
+              <tr><th>Parameter</th><th>Value</th></tr>
+              <tr><td>Annual Appreciation Rate</td><td>${(annualAppreciationRate * 100).toFixed(1)}%</td></tr>
+              <tr><td>Annual Inflation Rate</td><td>${(annualInflationRate * 100).toFixed(1)}%</td></tr>
+              <tr><td>Real Appreciation Rate (after inflation)</td><td>${(realAppreciationRate * 100).toFixed(1)}%</td></tr>
+              <tr><td>Rental Income Increase Rate</td><td>${(rentIncreaseRate * 100).toFixed(1)}%</td></tr>
+              <tr><td>Vacancy Rate</td><td>${(vacancyRate * 100).toFixed(1)}%</td></tr>
+              <tr><td>Property Management Fee</td><td>${(propertyManagementFee * 100).toFixed(1)}%</td></tr>
+              <tr><td>Maintenance</td><td>${(maintenancePercent * 100).toFixed(1)}%</td></tr>
+            </table>
+          </div>
+          
+          <div style="margin-top: 20px;">
+            <h3>5-Year Rental Cash Flow Projection</h3>
+            <table>
+              <tr>
+                <th>Year</th>
+                <th>Annual Cash Flow</th>
+                <th>Property Value</th>
+                <th>Equity</th>
+              </tr>
+              ${Array.from({length: yearsToHold}, (_, i) => {
+                const year = i + 1;
+                return `
+                  <tr>
+                    <td>Year ${year}</td>
+                    <td>$${formatCurrency(annualCashFlows[i])}</td>
+                    <td>$${formatCurrency(appreciatedValues[i])}</td>
+                    <td>$${formatCurrency(equityValues[i])}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </table>
+          </div>
+          
+          <div style="margin-top: 20px;">
+            <p>
+              ${totalRentalCashFlow < 0 
+                ? "Note: This property shows negative cash flow as a rental, which means you would need to contribute additional funds monthly." 
+                : "This property generates positive cash flow as a rental, which can contribute to your monthly income."}
+              ${netFlipProfit > totalRentalProfit 
+                ? "Based on the analysis, flipping this property appears to be the more profitable strategy." 
+                : "Based on the analysis, holding this property as a rental for 5 years appears to be the more profitable long-term strategy."}
+            </p>
+          </div>
+        </div>
+      `;
+    };
+
+    // Existing report HTML generation code...
     const reportHTML = `
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Real Estate Flip Analysis Report</title>
+          <title>Property Investment Analysis Report</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .section { margin-bottom: 30px; }
-            .metric { margin: 10px 0; }
-            .scenario { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
-            .good { color: green; }
-            .fair { color: orange; }
-            .poor { color: red; }
-            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-            th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-            th { background-color: #f5f5f5; }
-            .highlight { background-color: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 4px solid #2196f3; margin: 15px 0; }
-            .warning { background-color: #fff3e0; padding: 15px; border-radius: 5px; border-left: 4px solid #ff9800; margin: 15px 0; }
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1100px; margin: 0 auto; padding: 20px; }
+            h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+            h2 { color: #2c3e50; margin-top: 30px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+            h3 { color: #34495e; margin-top: 20px; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .highlight { background-color: #f8f9fa; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0; }
+            .section { margin: 30px 0; }
+            .good { color: #27ae60; }
+            .fair { color: #f39c12; }
+            .poor { color: #e74c3c; }
+            .warning { background-color: #fef9e7; border-left: 4px solid #f39c12; padding: 15px; }
+            .chart-container { margin: 20px 0; }
             @media print {
-              .pagebreak { page-break-before: always; }
+              body { font-size: 12pt; }
+              .no-print { display: none; }
+              @page { margin: 2cm; }
             }
           </style>
         </head>
         <body>
-          <h1>Real Estate Flip Analysis Report</h1>
+          <h1>Property Investment Analysis Report</h1>
+          <div class="highlight">
+            <h2>Executive Summary</h2>
+            <p><strong>Address:</strong> ${formData.propertyAddress || "Not provided"}</p>
+            <p><strong>Deal Quality:</strong> <span class="${getQualityColor(dealQuality).replace('primary','good').replace('warning','fair').replace('error','poor')}">${dealQuality}</span></p>
+            <p>${getExecutiveSummary(roi, arvToPurchaseRatio, renovationToArvRatio)}</p>
+          </div>
           
           <div class="section">
             <h2>Deal Summary</h2>
-            <p>This report analyzes a real estate flip opportunity with the following key metrics:</p>
             <table>
-              <tr><th>Metric</th><th>Value</th><th>Assessment</th></tr>
+              <tr>
+                <th>Metric</th>
+                <th>Value</th>
+                <th>Assessment</th>
+              </tr>
               <tr>
                 <td>ROI</td>
                 <td>${formatPercent(roi)}%</td>
-                <td class="${roi >= 20 ? 'good' : roi >= 10 ? 'fair' : 'poor'}">
-                  ${roi >= 20 ? 'Strong' : roi >= 10 ? 'Moderate' : 'Weak'}
-                </td>
+                <td class="${roi >= 20 ? 'good' : roi >= 10 ? 'fair' : 'poor'}">${roi >= 20 ? 'Good' : roi >= 10 ? 'Fair' : 'Poor'}</td>
               </tr>
               <tr>
                 <td>ARV to Purchase Ratio</td>
                 <td>${arvToPurchaseRatio.toFixed(2)}x</td>
-                <td class="${arvToPurchaseRatio >= 1.3 ? 'good' : arvToPurchaseRatio >= 1.2 ? 'fair' : 'poor'}">
-                  ${arvToPurchaseRatio >= 1.3 ? 'Strong' : arvToPurchaseRatio >= 1.2 ? 'Moderate' : 'Weak'}
-                </td>
+                <td class="${arvToPurchaseRatio >= 1.3 ? 'good' : arvToPurchaseRatio >= 1.2 ? 'fair' : 'poor'}">${arvToPurchaseRatio >= 1.3 ? 'Good' : arvToPurchaseRatio >= 1.2 ? 'Fair' : 'Poor'}</td>
               </tr>
               <tr>
                 <td>Renovation to ARV Ratio</td>
                 <td>${formatPercent(renovationToArvRatio)}%</td>
-                <td class="${renovationToArvRatio <= 20 ? 'good' : renovationToArvRatio <= 25 ? 'fair' : 'poor'}">
-                  ${renovationToArvRatio <= 20 ? 'Efficient' : renovationToArvRatio <= 25 ? 'Moderate' : 'High'}
-                </td>
+                <td class="${renovationToArvRatio <= 20 ? 'good' : renovationToArvRatio <= 25 ? 'fair' : 'poor'}">${renovationToArvRatio <= 20 ? 'Good' : renovationToArvRatio <= 25 ? 'Fair' : 'Poor'}</td>
               </tr>
               <tr>
                 <td>Net Profit</td>
                 <td>$${formatCurrency(netProfit)}</td>
-                <td class="${netProfit >= 30000 ? 'good' : netProfit >= 15000 ? 'fair' : 'poor'}">
-                  ${netProfit >= 30000 ? 'Strong' : netProfit >= 15000 ? 'Moderate' : 'Minimal'}
-                </td>
+                <td class="${netProfit >= 30000 ? 'good' : netProfit >= 15000 ? 'fair' : 'poor'}">${netProfit >= 30000 ? 'Good' : netProfit >= 15000 ? 'Fair' : 'Poor'}</td>
               </tr>
               <tr>
                 <td>Annualized ROI</td>
                 <td>${formatPercent(annualizedROI)}%</td>
-                <td class="${annualizedROI >= 30 ? 'good' : annualizedROI >= 20 ? 'fair' : 'poor'}">
-                  ${annualizedROI >= 30 ? 'Excellent' : annualizedROI >= 20 ? 'Good' : 'Below Target'}
-                </td>
+                <td class="${annualizedROI >= 30 ? 'good' : annualizedROI >= 20 ? 'fair' : 'poor'}">${annualizedROI >= 30 ? 'Good' : annualizedROI >= 20 ? 'Fair' : 'Poor'}</td>
               </tr>
             </table>
-            
-            <div class="${(netProfit >= 15000 && roi >= 15) ? 'highlight' : 'warning'}">
-              <p><strong>Executive Summary:</strong> ${(netProfit >= 25000 && roi >= 20) 
-                ? 'This deal shows strong potential with healthy profit margins and good ROI. Proceed with confidence while managing risks.' 
-                : (netProfit >= 15000 && roi >= 15) 
-                  ? 'This deal shows moderate potential. Consider if there are opportunities to improve the numbers by negotiating purchase price or reducing renovation costs.' 
-                  : 'This deal requires careful consideration. The profit potential is limited and the ROI is below standard targets for fix and flip projects.'}</p>
-            </div>
           </div>
-
+          
           <div class="section">
             <h2>Investment Details</h2>
             <table>
-              <tr><th>Component</th><th>Amount</th></tr>
-              <tr><td>Purchase Price</td><td>$${formatCurrency(purchasePrice)}</td></tr>
-              <tr><td>Renovation Cost</td><td>$${formatCurrency(renovationCost)}</td></tr>
-              <tr><td>Holding Costs</td><td>$${formatCurrency(totalHoldingCosts)}</td></tr>
-              <tr><td>Total Investment</td><td>$${formatCurrency(totalInvestment)}</td></tr>
-              <tr><td>Expected Selling Price (ARV)</td><td>$${formatCurrency(expectedSellingPrice)}</td></tr>
-              <tr><td>Net Profit</td><td>$${formatCurrency(netProfit)}</td></tr>
-              <tr><td>Annualized ROI</td><td>${formatPercent(annualizedROI)}%</td></tr>
+              <tr>
+                <th>Purchase Details</th>
+                <th>Renovation Details</th>
+                <th>Selling Details</th>
+              </tr>
+              <tr>
+                <td>Purchase Price</td>
+                <td>Renovation Cost</td>
+                <td>Expected Selling Price</td>
+              </tr>
+              <tr>
+                <td>$${formatCurrency(purchasePrice)}</td>
+                <td>$${formatCurrency(renovationCost)}</td>
+                <td>$${formatCurrency(expectedSellingPrice)}</td>
+              </tr>
+              <tr>
+                <td>Down Payment</td>
+                <td>Holding Period</td>
+                <td>Selling Costs</td>
+              </tr>
+              <tr>
+                <td>${formData.downPayment}%</td>
+                <td>${holdingPeriod} months</td>
+                <td>${formData.sellingCosts}%</td>
+              </tr>
+              <tr>
+                <td>Interest Rate</td>
+                <td>Monthly Expenses</td>
+                <td>Loan Term</td>
+              </tr>
+              <tr>
+                <td>${formData.interestRate}%</td>
+                <td>$${formatCurrency(monthlyExpenses)}</td>
+                <td>${formData.loanTerm} years</td>
+              </tr>
             </table>
-            
-            ${renovationBreakdownHTML}
           </div>
-
-          <div class="pagebreak"></div>
           
           <div class="section">
             <h2>What-If Analysis</h2>
+            <div class="highlight" style="margin-bottom: 20px;">
+              <p>This analysis shows how the investment performs under different scenarios, helping you understand the potential risks and opportunities.</p>
+              <p><strong>Why this matters:</strong> Real estate investments rarely go exactly as planned. By testing different scenarios, we can assess 
+              how resilient this deal is to unexpected changes in purchase price, selling price, renovation costs, and timeline.</p>
+              <p><strong>How to interpret:</strong> A strong deal will maintain positive returns even in the pessimistic scenario. 
+              The difference between the base and pessimistic scenarios indicates the level of risk.</p>
+            </div>
             <p>The following scenarios show how the deal performs under different conditions:</p>
             
-            <div class="scenario">
-              <h3>Optimistic Scenario</h3>
-              <p>Assumes:</p>
-              <ul>
-                <li>10% lower purchase price</li>
-                <li>10% higher ARV</li>
-                <li>10% lower renovation costs</li>
-                <li>20% shorter holding period</li>
-                <li>20% lower selling costs</li>
-                <li>10% lower interest rate</li>
-              </ul>
-              <p>Projected ROI: <span class="${scenarioROIs.optimistic >= 20 ? 'good' : scenarioROIs.optimistic >= 10 ? 'fair' : 'poor'}">${formatPercent(scenarioROIs.optimistic)}%</span></p>
-            </div>
-
-            <div class="scenario">
-              <h3>Pessimistic Scenario</h3>
-              <p>Assumes:</p>
-              <ul>
-                <li>10% higher purchase price</li>
-                <li>10% lower ARV</li>
-                <li>10% higher renovation costs</li>
-                <li>20% longer holding period</li>
-                <li>20% higher selling costs</li>
-                <li>10% higher interest rate</li>
-              </ul>
-              <p>Projected ROI: <span class="${scenarioROIs.pessimistic >= 20 ? 'good' : scenarioROIs.pessimistic >= 10 ? 'fair' : 'poor'}">${formatPercent(scenarioROIs.pessimistic)}%</span></p>
-            </div>
-
-            <div class="scenario">
-              <h3>Extreme Pessimistic Scenario</h3>
-              <p>Assumes:</p>
-              <ul>
-                <li>10% higher purchase price</li>
-                <li>10% lower ARV</li>
-                <li>30% higher renovation costs (common in renovations)</li>
-                <li>Double holding period (common delay)</li>
-                <li>20% higher selling costs</li>
-                <li>10% higher interest rate</li>
-              </ul>
-              <p>Projected ROI: <span class="${scenarioROIs.extremePessimistic >= 20 ? 'good' : scenarioROIs.extremePessimistic >= 10 ? 'fair' : 'poor'}">${formatPercent(scenarioROIs.extremePessimistic)}%</span></p>
-            </div>
+            <table>
+              <tr>
+                <th>Scenario</th>
+                <th>ROI</th>
+                <th>Net Profit</th>
+                <th>Assessment</th>
+              </tr>
+              ${scenariosForReport.map(scenario => `
+                <tr>
+                  <td>${scenario.name}</td>
+                  <td>${formatPercent(scenario.roi)}%</td>
+                  <td>$${formatCurrency(scenario.netProfit)}</td>
+                  <td class="${scenario.roi >= 20 ? 'good' : scenario.roi >= 10 ? 'fair' : 'poor'}">${scenario.roi >= 20 ? 'Good' : scenario.roi >= 10 ? 'Fair' : 'Poor'}</td>
+                </tr>
+              `).join('')}
+            </table>
             
             <div class="highlight" style="margin-top: 20px;">
-              <p><strong>Sensitivity Analysis:</strong> ${
-                scenarioROIs.pessimistic >= 15 
-                  ? 'The deal maintains good ROI even in the pessimistic scenario, indicating strong resilience to adverse conditions.' 
-                  : scenarioROIs.pessimistic >= 5 
-                    ? 'The deal maintains positive but reduced ROI in the pessimistic scenario, suggesting moderate risk.' 
-                    : 'The deal shows significant sensitivity to adverse conditions, with ROI dropping substantially in the pessimistic scenario.'}
+              <h3>Sensitivity Analysis</h3>
+              <p>
+                <strong>Key Insights:</strong> ${
+                  scenariosForReport[2].roi >= 15 
+                    ? 'The deal maintains good ROI even in the pessimistic scenario, indicating strong resilience to adverse conditions.' 
+                    : scenariosForReport[2].roi >= 5 
+                      ? 'The deal maintains positive but reduced ROI in the pessimistic scenario, suggesting moderate risk.' 
+                      : 'The deal shows significant sensitivity to adverse conditions, with ROI dropping substantially in the pessimistic scenario.'
+                }
               </p>
               <p>${
-                scenarioROIs.extremePessimistic >= 0 
-                  ? `Even in the extreme scenario, the deal remains profitable with a ${formatPercent(scenarioROIs.extremePessimistic)}% ROI.` 
-                  : `In the extreme scenario, the deal becomes unprofitable with a ${formatPercent(scenarioROIs.extremePessimistic)}% ROI. Extra caution is warranted.`
+                scenariosForReport[3].roi >= 0 
+                  ? `Even in the extreme scenario, the deal remains profitable with a ${formatPercent(scenariosForReport[3].roi)}% ROI.` 
+                  : `In the extreme scenario, the deal becomes unprofitable with a ${formatPercent(scenariosForReport[3].roi)}% ROI. Extra caution is warranted.`
               }</p>
             </div>
           </div>
-
-          <div class="pagebreak"></div>
           
+          <!-- Add Project Timeline to the report -->
           <div class="section">
-            <h2>Individual Scenario Analysis</h2>
-            <p>The charts below illustrate how specific changes to key variables affect the deal's performance:</p>
-            
-            ${generateROIBarChart(individualScenarios)}
-            
-            ${generateProfitBarChart(individualScenarios)}
-            
-            <div class="highlight" style="margin-top: 20px;">
-              <p><strong>Key Sensitivities:</strong></p>
-              <ul>
-                ${individualScenarios
-                  .filter(s => s.name !== 'Base Case')
-                  .map(s => {
-                    const difference = s.roi - baseScenario.roi;
-                    const impactText = Math.abs(difference) < 3 
-                      ? 'minimal impact' 
-                      : Math.abs(difference) < 7 
-                        ? 'moderate impact' 
-                        : 'significant impact';
-                    return `<li>${s.name}: ${formatPercent(difference)}% change in ROI (${impactText})</li>`;
-                  })
-                  .join('')}
-              </ul>
-              <p><strong>Most Sensitive Factors:</strong> ${(() => {
-                const sortedScenarios = [...individualScenarios]
-                  .filter(s => s.name !== 'Base Case')
-                  .sort((a, b) => Math.abs(baseScenario.roi - b.roi) - Math.abs(baseScenario.roi - a.roi));
-                return sortedScenarios.length > 0 
-                  ? `${sortedScenarios[0].name}, ${sortedScenarios[1].name}, and ${sortedScenarios[2].name}`
-                  : 'None identified';
-              })()}</p>
+            <h2>Project Timeline & Cash Flow</h2>
+            <div style="margin: 20px 0;">
+              <div class="timeline-container">
+                <table>
+                  <tr>
+                    <th>Project Phase</th>
+                    <th>Duration</th>
+                    <th>Cumulative Time</th>
+                    <th>Key Activities</th>
+                  </tr>
+                  <tr>
+                    <td>Purchase & Closing</td>
+                    <td>${formData.timelineEstimates?.closingTime || 30} days</td>
+                    <td>${formData.timelineEstimates?.closingTime || 30} days</td>
+                    <td>Contract signing, inspections, financing, title search</td>
+                  </tr>
+                  <tr>
+                    <td>Permits & Planning</td>
+                    <td>${formData.timelineEstimates?.permitTime || 15} days</td>
+                    <td>${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15)} days</td>
+                    <td>Obtaining necessary permits, finalizing renovation plans</td>
+                  </tr>
+                  <tr>
+                    <td>Demolition</td>
+                    <td>${formData.timelineEstimates?.demoTime || 7} days</td>
+                    <td>${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15) + parseInt(formData.timelineEstimates?.demoTime || 7)} days</td>
+                    <td>Interior demolition, site clearing, waste removal</td>
+                  </tr>
+                  <tr>
+                    <td>Rough-In Work</td>
+                    <td>${formData.timelineEstimates?.roughInTime || 14} days</td>
+                    <td>${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15) + parseInt(formData.timelineEstimates?.demoTime || 7) + parseInt(formData.timelineEstimates?.roughInTime || 14)} days</td>
+                    <td>Framing, electrical, plumbing, HVAC rough-ins</td>
+                  </tr>
+                  <tr>
+                    <td>Finishing Work</td>
+                    <td>${formData.timelineEstimates?.finishTime || 21} days</td>
+                    <td>${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15) + parseInt(formData.timelineEstimates?.demoTime || 7) + parseInt(formData.timelineEstimates?.roughInTime || 14) + parseInt(formData.timelineEstimates?.finishTime || 21)} days</td>
+                    <td>Drywall, flooring, cabinets, fixtures, painting, trim</td>
+                  </tr>
+                  <tr>
+                    <td>Final Inspections</td>
+                    <td>7 days</td>
+                    <td>${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15) + parseInt(formData.timelineEstimates?.demoTime || 7) + parseInt(formData.timelineEstimates?.roughInTime || 14) + parseInt(formData.timelineEstimates?.finishTime || 21) + 7} days</td>
+                    <td>Final walk-through, punch list items, municipal inspections</td>
+                  </tr>
+                  <tr>
+                    <td>Listing & Sale</td>
+                    <td>${formData.timelineEstimates?.listingTime || 45} days</td>
+                    <td>${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15) + parseInt(formData.timelineEstimates?.demoTime || 7) + parseInt(formData.timelineEstimates?.roughInTime || 14) + parseInt(formData.timelineEstimates?.finishTime || 21) + 7 + parseInt(formData.timelineEstimates?.listingTime || 45)} days</td>
+                    <td>Photography, listing, showings, offers, closing</td>
+                  </tr>
+                </table>
+              </div>
+              
+              <div style="margin-top: 20px;">
+                <h3>Cash Flow Timeline</h3>
+                <table>
+                  <tr>
+                    <th>Time Point</th>
+                    <th>Cash Flow</th>
+                    <th>Cumulative Cash Flow</th>
+                    <th>Notes</th>
+                  </tr>
+                  <tr>
+                    <td>Day 1</td>
+                    <td>-$${formatCurrency(downPayment)}</td>
+                    <td>-$${formatCurrency(downPayment)}</td>
+                    <td>Down payment at closing</td>
+                  </tr>
+                  <tr>
+                    <td>Day ${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15)}</td>
+                    <td>-$${formatCurrency(renovationCost * 0.3)}</td>
+                    <td>-$${formatCurrency(downPayment + (renovationCost * 0.3))}</td>
+                    <td>30% of renovation costs (initial payment)</td>
+                  </tr>
+                  <tr>
+                    <td>Day ${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15) + parseInt(formData.timelineEstimates?.demoTime || 7) + parseInt(formData.timelineEstimates?.roughInTime || 14)}</td>
+                    <td>-$${formatCurrency(renovationCost * 0.4)}</td>
+                    <td>-$${formatCurrency(downPayment + (renovationCost * 0.7))}</td>
+                    <td>40% of renovation costs (rough-in completion)</td>
+                  </tr>
+                  <tr>
+                    <td>Day ${parseInt(formData.timelineEstimates?.closingTime || 30) + parseInt(formData.timelineEstimates?.permitTime || 15) + parseInt(formData.timelineEstimates?.demoTime || 7) + parseInt(formData.timelineEstimates?.roughInTime || 14) + parseInt(formData.timelineEstimates?.finishTime || 21)}</td>
+                    <td>-$${formatCurrency(renovationCost * 0.3)}</td>
+                    <td>-$${formatCurrency(downPayment + renovationCost)}</td>
+                    <td>30% of renovation costs (final payment)</td>
+                  </tr>
+                  <tr>
+                    <td>Monthly</td>
+                    <td>-$${formatCurrency(monthlyExpenses)}</td>
+                    <td>-$${formatCurrency(downPayment + renovationCost + (monthlyExpenses * holdingPeriod))}</td>
+                    <td>Monthly holding costs (taxes, insurance, utilities, loan payments)</td>
+                  </tr>
+                  <tr>
+                    <td>End of Project</td>
+                    <td>+$${formatCurrency(expectedSellingPrice - (expectedSellingPrice * parseFloat(formData.sellingCosts) / 100))}</td>
+                    <td>+$${formatCurrency(netProfit)}</td>
+                    <td>Sale proceeds (after selling costs)</td>
+                  </tr>
+                </table>
+              </div>
             </div>
           </div>
-
+          
+          <div class="section">
+            <h2>Finance Options Comparison</h2>
+            <div style="margin: 20px 0;">
+              <table>
+                <tr>
+                  <th>Finance Option</th>
+                  <th>Cash Purchase</th>
+                  <th>Conventional Loan</th>
+                  <th>Hard Money Loan</th>
+                </tr>
+                <tr>
+                  <td>Down Payment</td>
+                  <td>$${formatCurrency(purchasePrice)}</td>
+                  <td>$${formatCurrency(purchasePrice * parseFloat(formData.downPayment) / 100)}</td>
+                  <td>$${formatCurrency(purchasePrice * 15 / 100)}</td>
+                </tr>
+                <tr>
+                  <td>Interest Rate</td>
+                  <td>0%</td>
+                  <td>${parseFloat(formData.interestRate)}%</td>
+                  <td>12%</td>
+                </tr>
+                <tr>
+                  <td>Loan Points</td>
+                  <td>0</td>
+                  <td>1 point ($${formatCurrency((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * 0.01)})</td>
+                  <td>2.5 points ($${formatCurrency((purchasePrice - (purchasePrice * 15 / 100)) * 0.025)})</td>
+                </tr>
+                <tr>
+                  <td>Total Interest Paid</td>
+                  <td>$0</td>
+                  <td>$${formatCurrency(((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * (parseFloat(formData.interestRate) / 100 / 12)) * holdingPeriod)}</td>
+                  <td>$${formatCurrency(((purchasePrice - (purchasePrice * 15 / 100)) * (12 / 100 / 12)) * holdingPeriod)}</td>
+                </tr>
+                <tr>
+                  <td>Total Investment</td>
+                  <td>$${formatCurrency(purchasePrice + renovationCost + (monthlyExpenses * holdingPeriod))}</td>
+                  <td>$${formatCurrency((purchasePrice * parseFloat(formData.downPayment) / 100) + renovationCost + ((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * 0.01) + (((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * (parseFloat(formData.interestRate) / 100 / 12)) * holdingPeriod) + (monthlyExpenses * holdingPeriod))}</td>
+                  <td>$${formatCurrency((purchasePrice * 15 / 100) + renovationCost + ((purchasePrice - (purchasePrice * 15 / 100)) * 0.025) + (((purchasePrice - (purchasePrice * 15 / 100)) * (12 / 100 / 12)) * holdingPeriod) + (monthlyExpenses * holdingPeriod))}</td>
+                </tr>
+                <tr>
+                  <td>Net Profit</td>
+                  <td>$${formatCurrency(expectedSellingPrice - (expectedSellingPrice * parseFloat(formData.sellingCosts) / 100) - purchasePrice - renovationCost - (monthlyExpenses * holdingPeriod))}</td>
+                  <td>$${formatCurrency(expectedSellingPrice - (expectedSellingPrice * parseFloat(formData.sellingCosts) / 100) - purchasePrice - renovationCost - ((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * 0.01) - (((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * (parseFloat(formData.interestRate) / 100 / 12)) * holdingPeriod) - (monthlyExpenses * holdingPeriod))}</td>
+                  <td>$${formatCurrency(expectedSellingPrice - (expectedSellingPrice * parseFloat(formData.sellingCosts) / 100) - purchasePrice - renovationCost - ((purchasePrice - (purchasePrice * 15 / 100)) * 0.025) - (((purchasePrice - (purchasePrice * 15 / 100)) * (12 / 100 / 12)) * holdingPeriod) - (monthlyExpenses * holdingPeriod))}</td>
+                </tr>
+                <tr>
+                  <td>Return on Investment (ROI)</td>
+                  <td>${formatPercent((expectedSellingPrice - (expectedSellingPrice * parseFloat(formData.sellingCosts) / 100) - purchasePrice - renovationCost - (monthlyExpenses * holdingPeriod)) / (purchasePrice + renovationCost + (monthlyExpenses * holdingPeriod)) * 100)}%</td>
+                  <td>${formatPercent((expectedSellingPrice - (expectedSellingPrice * parseFloat(formData.sellingCosts) / 100) - purchasePrice - renovationCost - ((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * 0.01) - (((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * (parseFloat(formData.interestRate) / 100 / 12)) * holdingPeriod) - (monthlyExpenses * holdingPeriod)) / ((purchasePrice * parseFloat(formData.downPayment) / 100) + renovationCost + ((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * 0.01) + (((purchasePrice - (purchasePrice * parseFloat(formData.downPayment) / 100)) * (parseFloat(formData.interestRate) / 100 / 12)) * holdingPeriod) + (monthlyExpenses * holdingPeriod)) * 100)}%</td>
+                  <td>${formatPercent((expectedSellingPrice - (expectedSellingPrice * parseFloat(formData.sellingCosts) / 100) - purchasePrice - renovationCost - ((purchasePrice - (purchasePrice * 15 / 100)) * 0.025) - (((purchasePrice - (purchasePrice * 15 / 100)) * (12 / 100 / 12)) * holdingPeriod) - (monthlyExpenses * holdingPeriod)) / ((purchasePrice * 15 / 100) + renovationCost + ((purchasePrice - (purchasePrice * 15 / 100)) * 0.025) + (((purchasePrice - (purchasePrice * 15 / 100)) * (12 / 100 / 12)) * holdingPeriod) + (monthlyExpenses * holdingPeriod)) * 100)}%</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+          
+          <!-- Add Exit Strategy Comparison to the report -->
+          ${generateExitStrategyComparison()}
+          
           <div class="section">
             <h2>Risk Assessment</h2>
             <p>${getRiskAssessment(roi, arvToPurchaseRatio, renovationToArvRatio, scenarioROIs)}</p>
             
             <div class="warning" style="margin-top: 20px;">
               <h3>Risk Mitigation Recommendations:</h3>
+              <p>Based on this analysis, here are specific steps you can take to protect your investment:</p>
               <ul>
-                ${renovationToArvRatio > 20 ? '<li>Consider getting multiple contractor bids to reduce renovation costs</li>' : ''}
-                ${holdingPeriod > 6 ? '<li>Develop a timeline with milestones to avoid project delays</li>' : ''}
-                ${netProfit < 20000 ? '<li>Negotiate purchase price more aggressively to improve margins</li>' : ''}
-                ${scenarioROIs.pessimistic < 10 ? '<li>Build a larger contingency fund to cover unexpected costs</li>' : ''}
-                ${arvToPurchaseRatio < 1.3 ? '<li>Verify ARV with multiple comps and possibly get a professional appraisal</li>' : ''}
-                <li>Obtain fixed-price contracts for major renovation components to limit cost overruns</li>
-                <li>Line up multiple exit strategies in case the property doesn't sell as quickly as expected</li>
+                ${renovationToArvRatio > 20 ? '<li><strong>Renovation Cost Risk:</strong> Get multiple contractor bids to reduce renovation costs. Consider phasing renovations to ensure each dollar spent maximizes value.</li>' : ''}
+                ${holdingPeriod > 6 ? '<li><strong>Timeline Risk:</strong> Develop a detailed timeline with milestones and penalties in contractor agreements to prevent delays that increase holding costs.</li>' : ''}
+                ${netProfit < 20000 ? '<li><strong>Profit Margin Risk:</strong> Negotiate purchase price more aggressively or find ways to add more value through strategic improvements that boost ARV without proportional cost increases.</li>' : ''}
+                ${scenarioROIs.pessimistic < 10 ? '<li><strong>Market Risk:</strong> Build a larger contingency fund (at least 20% of renovation budget) to cover unexpected costs and maintain profitability even in challenging scenarios.</li>' : ''}
+                ${arvToPurchaseRatio < 1.3 ? '<li><strong>Valuation Risk:</strong> Verify ARV with multiple comps and possibly get a professional appraisal. Consider getting a pre-listing inspection to identify any issues early.</li>' : ''}
+                <li><strong>Execution Risk:</strong> Obtain fixed-price contracts for major renovation components to limit cost overruns.</li>
+                <li><strong>Exit Strategy Risk:</strong> Line up multiple exit strategies in case the property doesn't sell as quickly as expected. ${parseFloat(formData.expectedMonthlyRent) > 0 ? 'The rental option provides an alternative exit if needed.' : 'Consider analyzing this as a potential rental as a backup plan.'}</li>
               </ul>
             </div>
           </div>
@@ -932,8 +1282,8 @@ function Results() {
       <Paper elevation={3} sx={{ p: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           <Typography variant="h4" component="h1">
-            Investment Analysis Results
-          </Typography>
+          Investment Analysis Results
+        </Typography>
           <Chip
             label={`Deal Quality: ${dealQuality}`}
             color={getQualityColor(dealQuality)}
@@ -1282,14 +1632,40 @@ function Results() {
           <Typography variant="h5" gutterBottom>
             Detailed Analysis
           </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
+            <TableContainer component={Paper} variant="outlined">
+              <Table>
               <TableBody>
                 {/* ... existing table rows ... */}
               </TableBody>
             </Table>
           </TableContainer>
         </Box>
+
+        {/* Timeline Visualization Section */}
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h5" gutterBottom>
+            Project Timeline & Cash Flow
+          </Typography>
+          <TimelineVisualization formData={formData} />
+        </Box>
+
+        {/* Finance Options Comparison Section */}
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h5" gutterBottom>
+            Finance Options Comparison
+          </Typography>
+          <FinanceOptionsComparison formData={formData} />
+        </Box>
+
+        {/* Exit Strategy Comparison - Only show if expectedMonthlyRent is provided */}
+        {parseFloat(formData.expectedMonthlyRent) > 0 && (
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h5" gutterBottom>
+              Exit Strategy Analysis: Flip vs. Rental
+            </Typography>
+            <ExitStrategyComparison formData={formData} />
+          </Box>
+        )}
 
         {/* Input Summary Section */}
         <Box sx={{ mt: 4 }}>
@@ -1302,20 +1678,20 @@ function Results() {
                 <Grid item xs={12} md={6}>
                   <Typography variant="subtitle1" gutterBottom>Purchase Details</Typography>
                   <Table size="small">
-                    <TableBody>
-                      <TableRow>
+                <TableBody>
+                  <TableRow>
                         <TableCell>Purchase Price</TableCell>
                         <TableCell align="right">${formatCurrency(purchasePrice)}</TableCell>
-                      </TableRow>
-                      <TableRow>
+                  </TableRow>
+                  <TableRow>
                         <TableCell>Down Payment</TableCell>
                         <TableCell align="right">{formData.downPayment}%</TableCell>
-                      </TableRow>
-                      <TableRow>
+                  </TableRow>
+                  <TableRow>
                         <TableCell>Interest Rate</TableCell>
                         <TableCell align="right">{formData.interestRate}%</TableCell>
-                      </TableRow>
-                      <TableRow>
+                  </TableRow>
+                  <TableRow>
                         <TableCell>Loan Term</TableCell>
                         <TableCell align="right">{formData.loanTerm} years</TableCell>
                       </TableRow>
@@ -1329,12 +1705,12 @@ function Results() {
                       <TableRow>
                         <TableCell>Renovation Cost</TableCell>
                         <TableCell align="right">${formatCurrency(renovationCost)}</TableCell>
-                      </TableRow>
-                      <TableRow>
+                  </TableRow>
+                  <TableRow>
                         <TableCell>Holding Period</TableCell>
                         <TableCell align="right">{holdingPeriod} months</TableCell>
-                      </TableRow>
-                      <TableRow>
+                  </TableRow>
+                  <TableRow>
                         <TableCell>Monthly Expenses</TableCell>
                         <TableCell align="right">${formatCurrency(monthlyExpenses)}</TableCell>
                       </TableRow>
@@ -1352,7 +1728,7 @@ function Results() {
                               <TableRow key={key}>
                                 <TableCell sx={{ textTransform: 'capitalize' }}>{key}</TableCell>
                                 <TableCell align="right">${formatCurrency(parseFloat(value))}</TableCell>
-                              </TableRow>
+                  </TableRow>
                             ))}
                         </TableBody>
                       </Table>
@@ -1363,18 +1739,18 @@ function Results() {
                   <Typography variant="subtitle1" gutterBottom>Selling Details</Typography>
                   <Table size="small">
                     <TableBody>
-                      <TableRow>
+                  <TableRow>
                         <TableCell>Expected Selling Price</TableCell>
                         <TableCell align="right">${formatCurrency(expectedSellingPrice)}</TableCell>
-                      </TableRow>
-                      <TableRow>
+                  </TableRow>
+                  <TableRow>
                         <TableCell>Selling Costs</TableCell>
                         <TableCell align="right">{formData.sellingCosts}%</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </Grid>
-              </Grid>
+                  </TableRow>
+                </TableBody>
+              </Table>
+          </Grid>
+        </Grid>
             </AccordionDetails>
           </Accordion>
         </Box>
@@ -1406,4 +1782,4 @@ function Results() {
   );
 }
 
-export default Results;
+export default Results; 
