@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/real-estate-calculator/static/css/main.13ddf121.css",
-    "main.js": "/real-estate-calculator/static/js/main.b98a0160.js",
+    "main.js": "/real-estate-calculator/static/js/main.be7b898a.js",
     "index.html": "/real-estate-calculator/index.html",
     "main.13ddf121.css.map": "/real-estate-calculator/static/css/main.13ddf121.css.map",
-    "main.b98a0160.js.map": "/real-estate-calculator/static/js/main.b98a0160.js.map"
+    "main.be7b898a.js.map": "/real-estate-calculator/static/js/main.be7b898a.js.map"
   },
   "entrypoints": [
     "static/css/main.13ddf121.css",
-    "static/js/main.b98a0160.js"
+    "static/js/main.be7b898a.js"
   ]
 }
